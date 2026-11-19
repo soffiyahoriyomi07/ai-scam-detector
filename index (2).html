@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Scam Detector</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#172033}.wrap{max-width:950px;margin:auto;padding:28px 18px}
+header{display:flex;justify-content:space-between;margin-bottom:45px}.brand{font-size:22px;font-weight:700}.status{color:#16834b;background:#e8f7ef;padding:8px 12px;border-radius:20px;font-size:13px}
+.hero{text-align:center}.hero h1{font-size:42px;margin:0 0 10px}.hero p{color:#667085}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:28px 0}.card,.panel{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:20px;box-shadow:0 6px 20px #0000000d}.card p{color:#667085;font-size:14px}.upload-area{border:2px dashed #b8c3d6;border-radius:14px;padding:20px;text-align:center;background:#f8faff;margin:14px 0}.upload-area input{max-width:100%;margin-top:12px}.preview{display:none;max-width:100%;max-height:320px;object-fit:contain;margin:14px auto;border-radius:12px;border:1px solid #e5e7eb}.hint{color:#667085;font-size:13px}.action-row{display:flex;flex-wrap:wrap;gap:6px}.primary:disabled{opacity:.55;cursor:not-allowed}
+.panel{padding:24px}textarea{width:100%;min-height:180px;border:1px solid #d0d5dd;border-radius:12px;padding:15px;font:inherit;box-sizing:border-box}
+button{border:0;border-radius:10px;padding:12px 18px;margin:8px 5px 0 0;font-weight:700;cursor:pointer}.primary{background:#315efb;color:#fff}.secondary,.examples button{background:#eef1f6;color:#344054}
+.result{display:none;margin-top:22px;padding:20px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}.score{font-size:30px;font-weight:800}.verdict{font-size:20px;font-weight:700;margin:6px 0 15px}li{margin:8px 0}
+@media(max-width:700px){.cards{grid-template-columns:1fr}.hero h1{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><div class="brand">🛡️ AI Scam Detector</div><div class="status">● Online</div></header>
+<div class="hero"><h1>Check before you trust.</h1><p>Paste a suspicious message and check for common scam signals.</p></div>
+<div class="cards">
+<div class="card"><h3>💬 Message Check</h3><p>Analyze suspicious messages.</p></div>
+<div class="card"><h3>📸 Screenshot Check</h3><p>Upload a screenshot, extract its text, and check for scam signals.</p></div>
+<div class="card"><h3>🔗 Link Check</h3><p>Coming soon.</p></div>
+</div>
+<div class="panel">
+<h2>Analyze a message</h2>
+<textarea id="msg" placeholder="Paste the suspicious message here..."></textarea><br>
+<div class="upload-area">
+<h3>📸 Analyze a screenshot</h3>
+<p class="hint">Choose a clear screenshot of a message. We'll extract the text in your browser.</p>
+<input id="screenshot" type="file" accept="image/*">
+<img id="preview" class="preview" alt="Screenshot preview">
+<div class="action-row"><button id="extractBtn" class="secondary" type="button" onclick="extractScreenshotText()" disabled>Extract Text from Screenshot</button></div>
+<p id="ocrStatus" class="hint" aria-live="polite">No screenshot selected.</p>
+<p class="hint">Privacy: the image is processed in your browser. Only extracted text is sent to the analysis server when you click Analyze Message. Avoid screenshots containing private details.</p>
+</div>
+<button class="primary" onclick="analyze()">Analyze Message</button><button class="secondary" onclick="clearBox()">Clear</button>
+<div><b>Try an example:</b><br>
+<button class="examples" onclick="ex(0)">🎁 Prize message</button>
+<button class="examples" onclick="ex(1)">💼 Fake job offer</button>
+<button class="examples" onclick="ex(2)">🏦 Urgent bank message</button>
+</div>
+<div id="result" class="result"></div>
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script>
+const BACKEND_URL = "https://ai-scam-detector-backend-e787.onrender.com/analyze";
+
+const examples=[
+"Congratulations! You have won ₦500,000. Claim your prize now by sending your bank details and OTP. Act now!",
+"We are hiring urgently. Earn ₦150,000 per week from home. Pay a small registration fee today to secure your position.",
+"URGENT! Your bank account will be blocked today. Send your PIN and OTP immediately to verify your account."
+];
+
+const screenshotInput = document.getElementById('screenshot');
+const preview = document.getElementById('preview');
+const extractBtn = document.getElementById('extractBtn');
+const ocrStatus = document.getElementById('ocrStatus');
+
+screenshotInput.addEventListener('change', () => {
+  const file = screenshotInput.files && screenshotInput.files[0];
+  if (!file) {
+    preview.style.display = 'none';
+    preview.removeAttribute('src');
+    extractBtn.disabled = true;
+    ocrStatus.textContent = 'No screenshot selected.';
+    return;
+  }
+  if (!file.type.startsWith('image/')) {
+    alert('Please choose an image file.');
+    screenshotInput.value = '';
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Please choose an image smaller than 10 MB.');
+    screenshotInput.value = '';
+    return;
+  }
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  extractBtn.disabled = false;
+  ocrStatus.textContent = 'Screenshot ready. Select “Extract Text from Screenshot”.';
+});
+
+function ex(i){document.getElementById('msg').value=examples[i];analyze()}
+
+function clearBox(){
+  document.getElementById('msg').value='';
+  document.getElementById('result').style.display='none';
+  screenshotInput.value='';
+  preview.style.display='none';
+  preview.removeAttribute('src');
+  extractBtn.disabled=true;
+  ocrStatus.textContent='No screenshot selected.';
+}
+
+async function extractScreenshotText(){
+  const file = screenshotInput.files && screenshotInput.files[0];
+  if (!file) { alert('Please choose a screenshot first.'); return; }
+  if (!window.Tesseract) {
+    ocrStatus.textContent='Text extraction library could not load. Check your internet connection and refresh.';
+    return;
+  }
+  extractBtn.disabled=true;
+  ocrStatus.textContent='Reading screenshot... This can take a little while.';
+  try {
+    const result = await Tesseract.recognize(file, 'eng', {
+      logger: info => {
+        if (info.status === 'recognizing text' && typeof info.progress === 'number') {
+          ocrStatus.textContent='Extracting text: ' + Math.round(info.progress * 100) + '%';
+        }
+      }
+    });
+    const extracted = (result.data.text || '').trim();
+    if (!extracted) {
+      ocrStatus.textContent='No readable text found. Try a clearer screenshot.';
+      return;
+    }
+    document.getElementById('msg').value=extracted;
+    ocrStatus.textContent='Text extracted! Review it in the message box, then click “Analyze Message”.';
+    document.getElementById('msg').scrollIntoView({behavior:'smooth', block:'center'});
+  } catch (error) {
+    console.error(error);
+    ocrStatus.textContent='Could not read this screenshot. Try a clearer image.';
+  } finally {
+    extractBtn.disabled=false;
+  }
+}
+
+async function analyze(){
+  const t=document.getElementById('msg').value.trim();
+  const result=document.getElementById('result');
+  if(!t){alert('Please paste a message first.');return}
+
+  result.style.display='block';
+  result.innerHTML='<div class="score">Analyzing...</div><p>Checking the message with the AI Scam Detector backend.</p>';
+
+  try {
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: t})
+    });
+
+    if (!response.ok) {
+      throw new Error('Backend returned HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+    const reasons = Array.isArray(data.reasons) ? data.reasons : [];
+    const advice = Array.isArray(data.advice) ? data.advice : [];
+
+    result.innerHTML =
+      '<div class="score">'+data.risk_score+'% risk</div>'+
+      '<div class="verdict">'+escapeHtml(data.verdict || 'Analysis complete')+'</div>'+
+      '<b>Why it was flagged</b><ul>'+
+      (reasons.length ? reasons : ['No specific reasons were returned.']).map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+
+      '</ul><b>Safety advice</b><ul>'+
+      (advice.length ? advice : ['Stay cautious and verify the sender independently.']).map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+
+      '</ul><small>Analysis provided by the AI Scam Detector backend.</small>';
+  } catch (error) {
+    console.error(error);
+    result.innerHTML =
+      '<div class="verdict">Could not connect to the analysis server</div>'+
+      '<p>Please try again in a moment. If the problem continues, the backend may be waking up or unavailable.</p>'+
+      '<small>Technical detail: '+escapeHtml(error.message)+'</small>';
+  }
+}
+
+function escapeHtml(value){
+  return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+}
+</script>
+</body>
+</html>
